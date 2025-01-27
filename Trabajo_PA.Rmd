@@ -1,0 +1,382 @@
+---
+title: "TRABAJO PA PRESENTACION - ANÁLISIS DESCRIPTIVO Y VISUALIZACIONES DEL CASO DENGUE EN EL PERÚ, PERIODO 2000 - 2023"
+output: 
+  html_document:
+    css: styles.css
+  pdf_document: default
+date: "2025-01-18"
+---
+```{r setup, include=FALSE}
+
+# Instalar paquetes si no están instalados
+if (!require(tidyverse)) install.packages("tidyverse")
+if (!require(lubridate)) install.packages("lubridate")
+if (!require(ggplot2)) install.packages("ggplot2")
+if (!require(dplyr)) install.packages("dplyr")
+if (!require(scales)) install.packages("scales")
+
+# Cargar librerías necesarias
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+knitr::opts_chunk$set(fig.width=5, fig.height=3)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+INTEGRANTES:
+
+-   ALBINO HUERTAS EDER ALBERTO / [73036543\@continental.edu.pe](mailto:73036543@continental.edu.pe)
+-   HUILLCA ALARCON EDSON JOEL / [46406505\@continental.edu.pe](mailto:46406505@continental.edu.pe)
+-   NIÑO ALCANTARA ULISES EMILIO / [16737529\@continental.edu.pe](mailto:16737529@continental.edu.pe)
+-   TOLEDO CHÁVEZ SALLY DAMARIS / [74444594\@continental.edu.pe](mailto:74444594@continental.edu.pe)
+
+## Presentación
+
+Este dataset contiene información sobre la notificación de casos de dengue al sistema de vigilancia en salud pública del Perú, gestionado y administrado por el Centro Nacional de Epidemiología, Prevención y Control de Enfermedades (CDC PERU). Los dengue_data provienen de la Red Nacional de Epidemiología (RENACE), que está conformada por 10 232 establecimientos de salud del Ministerio de Salud, EsSalud y otros del sector en los diferentes niveles de las Direcciones Regionales de Salud que tiene el Perú.
+
+**Descripción de los campos**
+
+| **CAMPO** | **TIPO** | **DENOMINACIÓN** | **VALORES** |
+|:-----------------|:-----------------|:-----------------|:-----------------|
+| departamento | Caracter | Región geográfica |   |
+| provincia | Caracter | Provincia |   |
+| distrito | Caracter | Lugar probable de infección |   |
+| enfermedad | Caracter | Diagnóstico vigilado |   |
+| ano | Integer | Año |   |
+| semana | Integer | Semana de inicio de síntomas |   |
+| diagnostic | Caracter | CIE 10 |   |
+| tipo_dx | Caracter | Tipo de diagnóstico | C= Confirmado, P = Probable, S = Sospechoso |
+| diresa | Caracter | Dirección de salud que notifica |   |
+| ubigeo | Caracter | Código del lugar probable de infección |   |
+| edad | Caracter | Edad del paciente |   |
+| tipo_edad | Caracter | Tipo de edad del paciente | A = Año, M = Mes, D = Días |
+| sexo | Caracter | Sexo | M = Masculino, F = Femenino |
+```{r show_col_types = FALSE}
+dengue_data <- read_csv(paste0(getwd(),"/lib/datos_abiertos_vigilancia_dengue_2000_2023.csv"))
+```
+## Resumen general de los datos
+```{r }
+head(dengue_data)
+summary(dengue_data)
+```
+## ANÁLISIS DEL DATASET
+```{r }
+
+# 2. Limpiar y preparar los datos
+# Convertir campos relevantes a tipo factor
+colnames(dengue_data)
+
+cols_to_factor <- c("departamento", "provincia", "distrito", "enfermedad", 
+                    "diagnostic", "tipo_dx", "diresa", "ubigeo", "tipo_edad", "sexo")
+dengue_data[cols_to_factor] <- lapply(dengue_data[cols_to_factor], as.factor)
+View(dengue_data)
+
+# Convertir campos de Año y Semana a fechas
+# Supongamos que la semana comienza el lunes
+dengue_data <- dengue_data %>%
+  mutate(
+    Fecha_inicio = suppressWarnings(as.Date(paste(ano, semana, 1, sep = "-"), "%Y-%U-%u"))
+  )
+
+# Convertir Edad a numérica para análisis
+# (Manejo de posibles casos como NA en datos no válidos)
+dengue_data$edad <- as.numeric(dengue_data$edad)
+```
+### Análisis descriptivo y visualizaciones
+```{r }
+# Total de casos por año y tipo de diagnóstico
+total_por_año <- dengue_data %>%
+  group_by(ano, tipo_dx) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+ggplot(total_por_año, aes(x = ano, y = Casos, fill = tipo_dx)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Total de casos por año y tipo de diagnóstico", 
+       x = "Año", y = "Número de casos", fill = "Tipo de Diagnóstico") +
+  scale_fill_manual(
+    values = c("C" = "red", "P" = "blue"),
+    labels = c("C" = "Confirmado","P" = "Probable"
+    )) +
+  scale_y_continuous(labels = comma)
+```
+### Distribución de la Población por edad y sexo
+```{r }
+dengue_data_edad_sexo <- dengue_data %>% filter(edad >= 0 & edad <= 120)
+
+ggplot(dengue_data_edad_sexo, aes(x = edad, fill = sexo)) +
+  geom_histogram(binwidth = 10, position = "dodge") +
+  theme_minimal() +
+  labs(title = "Distribución de Casos por Edad y Sexo", 
+       x = "Edad", y = "Número de casos", fill = "Sexo")+
+  scale_fill_manual(
+    values = c("M" = "blue", "F" = "red"),
+    labels = c("M" = "Masculino", "F" = "Femenino"
+    )) +
+  scale_y_continuous(labels = comma)
+```
+### Casos por departamento y tipo de diagnóstico
+```{r }
+casos_departamento <- dengue_data %>%
+  group_by(departamento, tipo_dx) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+ggplot(casos_departamento, aes(x = reorder(departamento, -Casos), y = Casos, fill = tipo_dx)) +
+  geom_bar(stat = "identity", position = "stack") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Casos por Departamento y Tipo de Diagnóstico", 
+       x = "Departamento", y = "Número de casos", fill = "Tipo de diagnóstico") +
+  scale_fill_manual(
+    values = c("C" = "red", "P" = "blue"),
+    labels = c("C" = "Confirmado","P" = "Probable"
+    )) +
+  scale_y_continuous(labels = comma)
+```
+### Tendencias temporales
+```{r }
+# Casos por semana
+tendencia_semanal <- dengue_data %>%
+  group_by(Fecha_inicio) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+ggplot(tendencia_semanal, aes(x = Fecha_inicio, y = Casos)) +
+  geom_line(color = "blue") +
+  theme_minimal() +
+  labs(title = "Tendencia semanal de casos", 
+       x = "Fecha de Inicio de Síntomas", y = "Número de Casos") +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "2 year") +
+  scale_y_continuous(labels = comma)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+### Distribución de la Población por sexo y rango de edad
+```{r }
+# Crear rangos de edad
+dengue_data <- dengue_data %>%
+  mutate(Rango_edad = case_when(
+    edad < 5 ~ "(A) Menores de 5 años",
+    edad >= 5 & edad < 18 ~ "(B) 5-17 años",
+    edad >= 18 & edad < 60 ~ "(C) 18-59 años",
+    edad >= 60 ~ "(D) 60 años o más",
+    TRUE ~ "Desconocido"
+  ))
+
+# Casos por rango de edad y sexo
+casos_por_rango <- dengue_data %>%
+  group_by(Rango_edad, sexo) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+ggplot(casos_por_rango, aes(x = Rango_edad, y = Casos, fill = sexo)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Casos por Rango de Edad y Sexo", 
+       x = "Rango de Edad", y = "Número de Casos", fill = "Sexo")+
+  scale_fill_manual(
+    values = c("M" = "blue", "F" = "red"),
+    labels = c("M" = "Masculino", "F" = "Femenino"
+    )) +
+  scale_y_continuous(labels = comma)
+```
+### Distribución de la Población por departamento y sexo:
+```{r }
+casos_por_departamento_sexo <- dengue_data %>%
+  group_by(departamento, sexo) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+ggplot(casos_por_departamento_sexo, aes(x = reorder(departamento, -Casos), y = Casos, fill = sexo)) +
+  geom_bar(stat = "identity", position = "stack") +  
+  coord_flip() +  
+  theme_minimal() +  
+  labs(title = "Casos de Dengue por Departamento y Sexo", 
+       x = "Departamento", y = "Número de Casos", fill = "Sexo") +
+  scale_fill_manual(
+    values = c("M" = "#A8DADC", "F" = "#FFB6B9"),
+    labels = c("M" = "Masculino", "F" = "Femenino")
+  ) +
+  scale_y_continuous(labels = comma)  
+```
+### Casos tipo de enfermedad y edad
+```{r }
+dengue_data <- dengue_data %>%
+  mutate(Rango_edad = case_when(
+    edad <= 2 ~ "(A)Lactantes (0-2 años)",
+    edad > 2 & edad <= 12 ~ "(B) Infante (3-12 años)",
+    edad > 12 & edad <= 20 ~ "(C) Adolescente (13-20 años)",
+    edad > 20 & edad <= 26 ~ "(D) Juventud (21-26 años)",
+    edad > 26 & edad <= 59 ~ "(E) Adulto (27-59 años)",
+    edad >= 60 ~ "(F) Anciano (60+ años)",
+    TRUE ~ "Desconocido"
+  ))
+
+casos_por_enfermedad_y_edad <- dengue_data %>%
+  group_by(Rango_edad, enfermedad) %>%
+  summarise(Casos = n(), .groups = 'drop')
+
+head(casos_por_enfermedad_y_edad)
+
+ggplot(casos_por_enfermedad_y_edad, aes(x = Rango_edad, y = Casos, fill = enfermedad)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Casos de Enfermedad por Tipo y Rango de Edad", 
+       x = "Rango de Edad", y = "Número de Casos", fill = "Enfermedad") +
+  scale_fill_manual(values = c(
+    "DENGUE CON SIGNOS DE ALARMA" = "orange",
+    "DENGUE GRAVE" = "red",
+    "DENGUE SIN SIGNOS DE ALARMA" = "green"
+  )) +
+  scale_y_continuous(labels = scales::comma) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+## ANÁLISIS DE CASOS CONFIRMADOS:
+```{r }
+# Datos confirmados
+dengue_data_confirmado <- dengue_data[dengue_data$tipo_dx == 'C', ]
+```
+
+### Distribución del dengue por año:
+```{r }
+tabla_anio <- dengue_data_confirmado %>%
+  count(ano)
+
+print(tabla_anio)
+
+plot(tabla_anio, type="o", main="Distribución de casos de Dengue por año", xlab = "AÑO", ylab = "Número de casos")
+```
+
+Observamos que la tendencia en casos de dengue confirmados ha ido incrementado a medida que pasa los años, sobre todo en el ultimo año **2023** que es el ultimo año registrado en el dataset.
+
+### Distribución del dengue por edad año 2023: casos confirmados
+```{r }
+
+dengue_data_edad_2023 <- dengue_data_confirmado[dengue_data_confirmado$edad >= 0 & dengue_data_confirmado$edad <= 120 & dengue_data_confirmado$ano=="2023",]
+head(dengue_data_edad_2023)
+
+# Histograma de edades
+ggplot(dengue_data_edad_2023, aes(x = edad)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
+  labs(title = "Distribución de la poblacion por edades, año 2023", x = "Edad", y = "Frecuencia") +
+  theme_minimal()
+```
+Durante el año 2023, la poblacion más afectada por el dengue esta ubicada entre los 5 a 60 años.
+
+### Distribución del dengue por sexo año 2023: casos confirmados
+```{r }
+# Contar casos por sexo
+tabla_sexo <- dengue_data_confirmado[dengue_data_confirmado$ano=="2023",] %>%
+  count(sexo)
+
+print(tabla_sexo)
+
+# Gráfico de barras
+ggplot(tabla_sexo, aes(x = sexo, y = n, fill = sexo)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Distribución de casos por sexo", x = "Sexo", y = "Número de casos") +
+  theme_minimal()
+```
+Durante el 2023, la población mas afectada por el dengue fueron mujeres.
+
+### Distribución del dengue por estado de la enfermedad año 2023: casos confirmados
+```{r }
+conteo_enfermedad <- dengue_data_confirmado[dengue_data_confirmado$ano == "2023", ] %>%
+  group_by(enfermedad) %>%
+  summarise(conteo = n()) %>%
+  arrange(conteo)  # Ordenar por conteo
+
+print(conteo_enfermedad)
+
+conteo_enfermedad$porcentaje <- round(conteo_enfermedad$conteo / sum(conteo_enfermedad$conteo) * 100, 1)
+
+#Crear gráfico de anillo
+ggplot(conteo_enfermedad, aes(x = "", y = conteo, fill = enfermedad)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y", start = 0) +  # Coordinar en forma de pastel
+  xlim(c(0, "")) +              # Crear el hueco central (anillo)
+  geom_text(aes(label = paste0(porcentaje, "%")), 
+            position = position_stack(vjust = 0.5), size = 5) +  # Añadir etiquetas
+  labs(title = "Gráfico de Anillo con Porcentajes") +
+  theme_void()  # Eliminar ejes y fondo
+```
+
+### Distribución del dengue por departamento año 2023: casos confirmados
+```{r }
+conteo_departamento <- dengue_data_confirmado[dengue_data_confirmado$ano=="2023",] %>%
+  group_by(departamento) %>%
+  summarise(conteo = n())
+
+conteo_departamento <- conteo_departamento %>%
+  arrange(conteo)
+
+print(conteo_departamento)
+
+bd <- barplot(conteo_departamento$conteo, 
+        names.arg = conteo_departamento$departamento,  # Etiquetas de las barras
+        horiz = TRUE,            # Hacerlo horizontal
+        las = 1,                 # Texto de etiquetas en horizontal
+        cex.names = 0.5,          # Reducir tamaño del texto de las etiquetas
+        col = "skyblue",         # Color de las barras
+        xlim = c(0, 90000),         # Extender eje X
+        main = "Distribución del dengue por departamento: 2023", 
+        xlab = "Población") 
+
+# Añadir los valores al final de las barras
+text(conteo_departamento$conteo, bd, labels = conteo_departamento$conteo, pos = 4, cex = 0.8, col = "blue")
+```
+### ANALISIS DEL DEPARTAMENTO MAS AFECTADO POR EL DENGUE EN EL AÑO 2023: PIURA
+#### Distribución del dengue por provincia: casos confirmados
+```{r }
+
+conteo_provincia <- dengue_data_confirmado[dengue_data_confirmado$ano=="2023" & dengue_data_confirmado$departamento=="PIURA",] %>%
+  group_by(provincia) %>%
+  summarise(conteo = n())
+
+conteo_provincia <- conteo_provincia %>%
+  arrange(conteo)
+
+print(conteo_provincia)
+
+bp <- barplot(conteo_provincia$conteo, 
+        names.arg = conteo_provincia$provincia,  # Etiquetas de las barras
+        horiz = TRUE,            # Hacerlo horizontal
+        las = 1,                 # Texto de etiquetas en horizontal
+        cex.names = 0.7,          # Reducir tamaño del texto de las etiquetas
+        col = "skyblue",         # Color de las barras
+        xlim = c(0, 45000),         # Extender eje X
+        main = "Distribución del dengue por provincia: caso Piura", 
+        xlab = "Población")
+
+# Añadir los valores al final de las barras
+text(conteo_provincia$conteo, bp, labels = conteo_provincia$conteo, pos = 4, cex = 0.8, col = "blue")
+```
+#### Distribución del dengue por distrito: casos confirmados
+```{r }
+casos_por_distrito <- dengue_data %>%
+  group_by(distrito) %>%
+  summarise(Casos = n(), .groups = 'drop') %>%
+  arrange(desc(Casos))  
+
+distrito_mas_afectado <- casos_por_distrito[1, ]
+
+dengue_distrito_afectado <- dengue_data %>%
+  filter(distrito == distrito_mas_afectado$distrito & tipo_dx=="C")
+
+# Casos por distrito y sexo en gráfico circular con porcentajes y colores pastel
+ggplot(dengue_distrito_afectado, aes(x = "", fill = sexo)) +
+  geom_bar(stat = "count", width = 1) +  
+  coord_polar(theta = "y") +  
+  theme_minimal() +  
+  labs(title = paste("Casos de Dengue Sexo vs Distrito de", distrito_mas_afectado$distrito), 
+       fill = "Sexo") +
+  scale_fill_manual(values = c("M" = "#A8DADC", "F" = "#FFB6B9")) +  
+  theme(
+    axis.text = element_blank(),  
+    axis.title = element_blank(),  
+    plot.title = element_text(color = "#3E4A59", size = 18, face = "bold")  
+  ) +
+  geom_text(aes(label = paste0(round((..count..)/sum(..count..)*100, 1), "%")), 
+            stat = "count", 
+            position = position_stack(vjust = 0.5),  
+            color = "#FFFFFF", size = 6)
+```
